@@ -58,12 +58,15 @@ provider:
 #    - exclude-me-dir/**
 
 functions:
+  syncShipmentStatus:
+      handler: handler.syncShipmentStatus
+      events:
+        - http:
+            path: orders/sync
+            method: post
+
   newMoltinOrder:
     handler: handler.newMoltinOrder
-
-#    The following are a few example events you can configure
-#    NOTE: Please make sure to change your handler code to work with those events
-#    Check the event documentation for details
     events:
       - http:
           path: orders/new

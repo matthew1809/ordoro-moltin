@@ -1,45 +1,33 @@
 'use strict';
 
+const helpers = require('./helpers')
 
 module.exports.newMoltinOrder = async (event, context) => {
-  const request = require('request');
-
-  // bas64 for Ordoro auth
-  const userpass = "username" + ":" + "password";  
-  let buff = new Buffer(userpass);  
-  let base64auth = buff.toString('base64')
-  
   // parse webhook  
   let eventBody = JSON.parse(event.body);
   let moltinOrderBody = JSON.parse(eventBody.resources).data
-  let includedItems = JSON.parse(eventBody.resources).included.items
-  let createOrderBody = {"order_id": moltinOrderBody.id, "billing_address": moltinOrderBody.billing_address, "shipping_address": moltinOrderBody.shipping_address, "lines": includedItems}
+  let items = JSON.parse(eventBody.resources).included.items
 
-  // build request for creating order in Ordoro
-  let options = {
-    uri: '  https://api.ordoro.com/order/',
-    headers: {'Authorization': "Basic  " + base64auth},
-    method: 'POST',
-    json: createOrderBody
-  };
+  // transform data to Ordoro formatting
+  let lines = await helpers.parseLineItems(items)
+  let shipping = helpers.parseAddress(moltinOrderBody.shipping_address)
+  let billing = helpers.parseAddress(moltinOrderBody.billing_address)
+  let createOrdoroOrderBody = {"order_id": moltinOrderBody.id, "billing_address": billing, "shipping_address": shipping, "lines": lines}
 
-  // make request to Ordoro
-  request(options, function (error, response, body) {
-    if (!error && response.statusCode == 200) {
-      console.log(body)
-    } else if(error) {
-      console.log(error)
-    } else {
-      console.log(response)
-    }
-  });
-
-  return {
-    statusCode: 200,
-    body: JSON.stringify({
-      message: 'Go Serverless v1.0! Your function executed successfully!',
-      input: event,
-    }),
-  };
-
+  // make Ordoro request
+  try {
+    helpers.createOrdoroOrder(createOrdoroOrderBody)
+    return helpers.responseBuilder(response.statusCode, 'all good')
+  } catch(e) {
+    return helpers.responseBuilder(500, 'not good')
+  }
 };
+
+module.exports.syncShipmentStatus = async (event, context) => {
+  try {
+    await helpers.processAllUnshippedOrders()
+    return helpers.responseBuilder(200, 'all good')
+  } catch(e) {
+    return helpers.responseBuilder(500, JSON.stringify(e)) 
+  }
+}
